@@ -1,0 +1,14 @@
+---
+- project:
+    name: example
+    github-url: https://github.com/nextrevision/jenkins-gitflow-example
+    check-cmd: |
+      #!/bin/bash
+      find . -type f
+      find . -type d
+    build-cmd: |
+      tar czf artifact.tar.gz *
+    deploy-cmd: |
+      tar xzf artifact.tar.gz
+    jobs:
+      - '{name}_pipeline'

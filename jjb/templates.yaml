@@ -1,0 +1,81 @@
+---
+- job-template:
+    name: '{name}_check'
+    properties:
+      - github:
+          url: '{github-url}'
+    parameters:
+      - string:
+          name: BRANCH
+          default: '**'
+          description: "Git commit or branch to build"
+    scm:
+      - git:
+          branches:
+            - $BRANCH
+          url: '{github-url}'
+          wipe-workspace: true
+          skip-tag: true
+          submodule:
+            recursive: true
+    triggers:
+      - github
+    wrappers:
+      - inject
+    builders:
+      - shell: '{check-cmd}'
+    publishers:
+      - conditional-publisher:
+          - condition-kind: shell
+            condition-command: |
+              echo ${{GIT_BRANCH}} | \
+                egrep -q '^(origin\/)?(master|develop|release\/.*|hotfix\/.*)$'
+            on-evaluation-failure: dont-run
+            action:
+              - trigger:
+                  project: '{name}_build'
+                  threshold: SUCCESS
+
+- job-template:
+    name: '{name}_build'
+    properties:
+      - github:
+          url: '{github-url}'
+    scm:
+      - git:
+          url: '{github-url}'
+          wipe-workspace: true
+          skip-tag: true
+          submodule:
+            recursive: true
+    builders:
+      - shell: '{build-cmd}'
+    publishers:
+      - archive:
+          allow-empty: false
+          artifacts: '*.tar.gz'
+      - trigger:
+          project: '{name}_deploy'
+          threshold: SUCCESS
+
+- job-template:
+    name: '{name}_deploy'
+    properties:
+      - github:
+          url: '{github-url}'
+    builders:
+      - copyartifact:
+          filter: '*.tar.gz'
+          target: .
+          flatten: true
+          project: '{name}_build'
+          which-build: upstream-build
+          fallback-to-last-successful: true
+      - shell: '{deploy-cmd}'
+
+- job-group:
+    name: '{name}_pipeline'
+    jobs:
+      - '{name}_check'
+      - '{name}_build'
+      - '{name}_deploy'
