@@ -23,8 +23,10 @@
     wrappers:
       - inject
     builders:
+      - groovy-branch
       - shell: '{check-cmd}'
     publishers:
+      - add-git-meta
       - conditional-publisher:
           - condition-kind: shell
             condition-command: |
@@ -32,9 +34,10 @@
                 egrep -q '^(origin\/)?(master|develop|release\/.*|hotfix\/.*)$'
             on-evaluation-failure: dont-run
             action:
-              - trigger:
-                  project: '{name}_build'
-                  threshold: SUCCESS
+              - trigger-parameterized-builds:
+                - project: '{name}_build'
+                  git-revision: true
+                  condition: SUCCESS
 
 - job-template:
     name: '{name}_build'
@@ -48,21 +51,29 @@
           skip-tag: true
           submodule:
             recursive: true
+    wrappers:
+      - inject
     builders:
+      - groovy-branch
       - shell: '{build-cmd}'
     publishers:
+      - add-git-meta
       - archive:
           allow-empty: false
           artifacts: '*.tar.gz'
-      - trigger:
-          project: '{name}_deploy'
-          threshold: SUCCESS
+      - trigger-parameterized-builds:
+        - project: '{name}_deploy'
+          git-revision: true
+          condition: SUCCESS
 
 - job-template:
     name: '{name}_deploy'
     properties:
       - github:
           url: '{github-url}'
+    wrappers:
+      - inject
+      - workspace-cleanup
     builders:
       - copyartifact:
           filter: '*.tar.gz'
@@ -72,6 +83,8 @@
           which-build: upstream-build
           fallback-to-last-successful: true
       - shell: '{deploy-cmd}'
+    publishers:
+      - add-git-meta
 
 - job-group:
     name: '{name}_pipeline'

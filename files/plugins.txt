@@ -8,11 +8,14 @@ git
 github-api
 github
 groovy
+groovy-postbuild
 parameterized-trigger
 plain-credentials
+rebuild
 run-condition
 scm-api
 ssh-agent
 ssh-credentials
 token-macro
 workflow-step-api
+ws-cleanup

@@ -1,0 +1,77 @@
+---
+- builder:
+    name: groovy-branch
+    builders:
+      - system-groovy:
+          command: |
+            import hudson.model.*
+
+            def setBuildParameter(String key, String val) {
+                def npl = new ArrayList<StringParameterValue>()
+                npl.add(new StringParameterValue(key, val))
+                def newPa = null
+                def oldPa = build.getAction(ParametersAction.class)
+                if (oldPa != null) {
+                    build.actions.remove(oldPa)
+                    newPa = oldPa.createUpdated(npl)
+                } else {
+                    newPa = new ParametersAction(npl)
+                }
+                build.actions.add(newPa)
+            }
+
+            def getBranch(String commit, String workspace) {
+              def result = "detached"
+              def command = "git branch -a --contains $commit"
+              def workingDir = new File(workspace)
+              def process = new ProcessBuilder(addShellPrefix(command))
+                                                .directory(workingDir)
+                                                .redirectErrorStream(true)
+                                                .start()
+              process.inputStream.eachLine {
+                if (it =~ /\s+remotes\/origin\//) {
+                  result = it.minus("  remotes/origin/")
+                }
+              }
+              process.waitFor();
+              return result
+            }
+
+            private def addShellPrefix(String command) {
+              commandArray = new String[3]
+              commandArray[0] = "sh"
+              commandArray[1] = "-c"
+              commandArray[2] = command
+              return commandArray
+            }
+            def commitSha = build.getEnvironment(listener)['GIT_COMMIT']
+            def workspace = build.getEnvironment(listener)['WORKSPACE']
+            def branch = getBranch(commitSha, workspace)
+            println "Setting Commit to $commitSha"
+            println "Setting Branch to $branch"
+            setBuildParameter("BRANCH", commitSha)
+            setBuildParameter("GIT_BRANCH", branch)
+
+- wrapper:
+    name: workspace-cleanup
+    wrappers:
+      - workspace-cleanup:
+        include: '**'
+        dirmatch: true
+
+- publisher:
+    name: add-git-meta
+    publishers:
+      - groovy-postbuild:
+          script: |
+            def git_commit = manager.envVars['GIT_COMMIT']
+            def git_branch = manager.envVars['GIT_BRANCH']
+            def text = ""
+            if (git_commit) {
+              text= "${git_commit.take(10)} (${git_branch})"
+              manager.listener.logger.println("Git Info: Branch ${git_branch}, Commit: ${git_commit}")
+            }
+            if (text) {
+              manager.addShortText(text, "black", "transparent", "0px", "snow")
+            }
+          on-failure: nothing

@@ -8,7 +8,9 @@
       find . -type d
     build-cmd: |
       tar czf artifact.tar.gz *
+      ls -al
     deploy-cmd: |
       tar xzf artifact.tar.gz
+      ls -al
     jobs:
       - '{name}_pipeline'
